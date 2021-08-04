@@ -513,17 +513,17 @@ class Instagram:
 
         return medias
 
-    def get_medias_by_tag(self, tag, count=12, max_id='', min_timestamp=None):
+    def get_medias_by_tag(self, tag, count=12, max_id='', min_timestamp=None, stop_code=None):
         """
         :param tag: tag string
         :param count: the number of how many media you want to get
         :param max_id: used to paginate
         :param min_timestamp: limit the time you want to start from
+        :param stop_code: short_code to stop fetching
         :return: list of Media
         """
         index = 0
         medias = []
-        media_ids = []
         has_next_page = True
         while index < count and has_next_page:
 
@@ -539,35 +539,34 @@ class Instagram:
             arr = response.json()
 
             try:
-                arr['graphql']['hashtag']['edge_hashtag_to_media']['count']
-            except KeyError:
-                return []
-
-            nodes = arr['graphql']['hashtag']['edge_hashtag_to_media']['edges']
-            for media_array in nodes:
-                if index == count:
-                    return medias
-                media = Media(media_array['node'])
-                if media.identifier in media_ids:
-                    return medias
-
-                if min_timestamp is not None \
-                        and media.created_time < min_timestamp:
-                    return medias
-
-                media_ids.append(media.identifier)
-                medias.append(media)
-                index += 1
-
-            if len(nodes) == 0:
+                arr['data']['recent']['sections']
+            except (TypeError, KeyError):
                 return medias
 
-            max_id = \
-                arr['graphql']['hashtag']['edge_hashtag_to_media']['page_info'][
-                    'end_cursor']
-            has_next_page = \
-                arr['graphql']['hashtag']['edge_hashtag_to_media']['page_info'][
-                    'has_next_page']
+            sections = arr['data']['recent']['sections']
+            for section in sections:
+                nodes = section['layout_content']['medias']
+                for node in nodes:
+                    if index == count:
+                        return medias
+
+                    # TODO: serialize media
+                    media = node['media']
+
+                    code = media['code']
+                    if code == stop_code:
+                        return medias
+
+                    taken_at = media.get('taken_at')
+                    if min_timestamp is not None \
+                            and taken_at < min_timestamp:
+                        return medias
+
+                    medias.append(media)
+                    index += 1
+
+            max_id = arr['data']['recent'].get('next_max_id')
+            has_next_page = arr['data']['recent']['more_available']
 
         return medias
 
